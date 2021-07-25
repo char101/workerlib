@@ -26,11 +26,6 @@ class Renderer_Phug extends Renderer
             ],
             'keywords' => [
             ],
-            // 'includes'       => [APPPATH.'views/mixins.pug'],
-            // 'shared_variables' => [
-            //     'session' => $session,
-            // ],
-
             'php_token_handlers' => [T_VARIABLE => null], // throw exception for undefined variable
             'on_output'          => function ($event) {
                 $event->setOutput("<?php namespace pug;\n ?>".$event->getOutput());
@@ -45,6 +40,24 @@ class Renderer_Phug extends Renderer
 
     public function render($template, $vars = [])
     {
-        return $this->optimizer->renderFile($template.'.pug', $vars);
+        return $this->optimizer->renderFile($template, $vars);
+    }
+
+    public static function clean()
+    {
+        $cacheDir = TMP_DIR.'/pug';
+        if (is_dir($cacheDir)) {
+            runWithLock($cacheDir.'/clean.lock', function () use ($cacheDir) {
+                foreach (scandir($cacheDir) as $file) {
+                    if ($file[0] === '.' || $file === 'lock') {
+                        continue;
+                    }
+                    $path = $cacheDir.'/'.$file;
+                    if (is_file($path)) {
+                        unlink($path);
+                    }
+                }
+            }, 5);
+        }
     }
 }

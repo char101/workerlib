@@ -40,10 +40,6 @@ class Renderer_Phug_Optimizer extends Phug\Optimizer
             $__pug_parameters = [$self => $__pug_parameters];
         }
 
-        // if (!file_exists($__pug_cache_file)) {
-        //     file_put_contents($__pug_cache_file, $this->renderer->compileFile($__pug_file));
-        // }
-
         $execution = function () use ($__pug_cache_file, &$__pug_parameters) {
             extract($__pug_parameters);
             include $__pug_cache_file;

@@ -13,7 +13,7 @@ class Renderer_Fenom extends Renderer
 
         $compileDir = TMP_DIR.'/fenom';
         if (!is_dir($compileDir)) {
-            mkdir($compileDir);
+            mkdir($compileDir, 0700);
         }
         $fenom->setCompileDir($compileDir);
         $fenom->setOptions([
@@ -24,7 +24,7 @@ class Renderer_Fenom extends Renderer
         ]);
 
         $this->scss = new \ScssPhp\ScssPhp\Compiler();
-        $this->scss->setOutputStyle(PRODUCTION ? \ScssPhp\ScssPhp\OutputStyle::COMPRESSED : \ScssPhp\ScssPhp\OutputStyle::EXPANDED);
+        $this->scss->setOutputStyle((PRODUCTION || UPSTREAM) ? \ScssPhp\ScssPhp\OutputStyle::COMPRESSED : \ScssPhp\ScssPhp\OutputStyle::EXPANDED);
 
         $this->parsedown = new Parsedown();
 
@@ -37,12 +37,12 @@ class Renderer_Fenom extends Renderer
 
     public function render($template, $vars = [])
     {
-        return $this->fenom->fetchFile($template.'.tpl', $vars);
+        return $this->fenom->fetchFile($template, $vars);
     }
 
     public function compileTemplates()
     {
-        $compileDir = Config::get('fenom.compile_dir');
+        $compileDir = TMP_DIR.'/fenom';
         $fenom      = $this->fenom;
         $fh         = fopen($compileDir.'lock', 'w');
         if ($fh) {
@@ -65,6 +65,23 @@ class Renderer_Fenom extends Renderer
                 flock($fh, LOCK_UN);
             }
             fclose($fh);
+        }
+    }
+
+    public static function clean()
+    {
+        $cacheDir = TMP_DIR.'/fenom';
+        if (is_dir($cacheDir)) {
+            runWithLock($cacheDir.'/clean.lock', function () use ($cacheDir) {
+                foreach (scandir($cacheDir) as $file) {
+                    if ($file[0] === '.' || $file === 'lock') {
+                        continue;
+                    }
+                    if (is_file($file)) {
+                        unlink($cacheDir.'/'.$file);
+                    }
+                }
+            }, 5);
         }
     }
 

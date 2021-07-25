@@ -11,12 +11,15 @@ class Config
 
     public static function get($path, $default = null)
     {
-        $value = self::$config;
+        $value      = self::$config;
+        $hasDefault = count(func_get_args()) === 2;
         foreach (explode('.', $path) as $key) {
             if (array_key_exists($key, $value)) {
                 $value = $value[$key];
-            } else {
+            } elseif ($hasDefault) {
                 return $default;
+            } else {
+                throw new Exception('Config key '.$path.' not found');
             }
         }
         return $value;

@@ -7,15 +7,16 @@ use Workerman\Protocols\Http\Session;
 
 class Controller implements ArrayAccess
 {
-    protected $db;
+    protected $app;
     protected $connection;
     protected $request;
     protected $method;
 
     private $vars = [];
 
-    public function __construct($connection, $request, $method)
+    public function __construct($app, $connection, $request, $method)
     {
+        $this->app        = $app;
         $this->connection = $connection;
         $this->request    = $request;
         $this->method     = $method;
@@ -24,33 +25,47 @@ class Controller implements ArrayAccess
     public function __get($name)
     {
         if ($name === 'session') {
-            $session = $this->request->session();
+            $session = new SessionProxy($this->request->session());
 
             $this->session = $session;
 
             return $session;
         }
 
-        throw Exception('Undefined property: '.$name);
+        throw new Exception('Undefined property: '.$name);
     }
 
     public function offsetExists($key)
     {
+        if ($key[0] == '@') {
+            return isset($this->session[substr($key, 1)]);
+        }
         return isset($this->vars[$key]);
     }
 
     public function offsetGet($key)
     {
+        if ($key[0] == '@') {
+            return $this->session[substr($key, 1)];
+        }
         return $this->vars[$key];
     }
 
     public function offsetSet($key, $value)
     {
+        if ($key[0] == '@') {
+            $this->session[substr($key, 1)] = $value;
+            return;
+        }
         $this->vars[$key] = $value;
     }
 
     public function offsetUnset($key)
     {
+        if ($key[0] == '@') {
+            unset($this->session[substr($key, 1)]);
+            return;
+        }
         unset($this->vars[$key]);
     }
 
@@ -60,13 +75,12 @@ class Controller implements ArrayAccess
 
     public function getTemplatePath($template)
     {
-        static $cache = [];
-        if (isset($cache[$template])) {
-            return $cache[$template];
+        // template path without extension
+        if ($template[0] === '/') {
+            return $template;
         }
-        $templatePath     = APP_DIR.'/templates/'.implode('/', explode('_', strtolower(substr(static::class, 11)))).'/'.$template;
-        $cache[$template] = $templatePath;
-        return $templatePath;
+
+        return '/'.implode('/', explode('_', strtolower(substr(static::class, 11)))).'/'.$template;
     }
 
     final public function sendBlob($data, $headers = [])
@@ -114,7 +128,6 @@ class Controller implements ArrayAccess
 
         $prefix = $this->prefix();
         $app    = [
-            'session'    => new SessionProxy($this->session),
             'request'    => $this->request,
             'controller' => substr(static::class, 11),
             'method'     => $this->method,
@@ -137,7 +150,7 @@ class Controller implements ArrayAccess
             $dumps          = [];
         }
 
-        return new Response($status, $headers, App::$renderer->render($this->getTemplatePath($template), $vars));
+        return new Response($status, $headers, $this->app->render($this->getTemplatePath($template), $vars));
     }
 
     final protected function renderPDF($template, $vars = null, $filename = null)

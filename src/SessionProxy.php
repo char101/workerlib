@@ -6,6 +6,11 @@ class SessionProxy implements ArrayAccess
     {
     }
 
+    public function __call($name, $args)
+    {
+        return call_user_func_array([$this->session, $name], $args);
+    }
+
     public function offsetGet($key)
     {
         return $this->session->get($key);
@@ -18,9 +23,13 @@ class SessionProxy implements ArrayAccess
 
     public function offsetUnset($key)
     {
+        if ($this->session->exists($key)) {
+            $this->session->delete($key);
+        }
     }
 
     public function offsetSet($key, $value)
     {
+        $this->session->set($key, $value);
     }
 }
