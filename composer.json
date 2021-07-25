@@ -1,5 +1,5 @@
 {
-  "name": "char101/workerman-utils",
+  "name": "char101/workerlib",
   "version": "0.1",
   "minimum-stability": "dev",
   "require": {
