@@ -256,7 +256,6 @@ class App
 
                 $sessionId = $req->cookie(Http::sessionName());
                 if ($sessionId) {
-                    echo 'renewing '.$sessionId."\n";
                     Session::updateTimestamp($sessionId);
                 }
             } catch (\Throwable $e) {
