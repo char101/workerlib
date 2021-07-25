@@ -37,7 +37,7 @@ class App
         // TODO: rotate logs
         define('LOG_DIR', APP_DIR.'/log/'.ENV);
         if (!is_dir(LOG_DIR)) {
-            mkdir(LOG_DIR, 07000);
+            mkdir(LOG_DIR, 0700);
         }
 
         echo sprintf("ENV: %s APP_DIR: %s\n", ENV, APP_DIR);
