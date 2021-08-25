@@ -1,0 +1,17 @@
+# config template, customize to your application settings
+
+env: development
+
+redis:
+  host: localhost
+  port: 6379
+  db:
+    cache: 1
+
+db:
+  default:
+    dsn: pgsql:host=localhost;port=5432;dbname=app;user=app;password=secret
+
+ldap:
+  uri: ldap://host:389
+  base: o=Organization,c=Country

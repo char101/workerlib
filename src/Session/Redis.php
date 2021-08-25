@@ -1,6 +1,6 @@
 <?php
 
-class RedisSessionHandler extends Workerman\Protocols\Http\Session\RedisSessionHandler
+class Session_Redis extends Workerman\Protocols\Http\Session\RedisSessionHandler
 {
     public function updateTimestamp($sessionId)
     {

@@ -28,22 +28,31 @@ class App
         $appDir  = dirname($caller['file']);
         $appName = basename($appDir);
 
+        $env = yaml_parse_file($appDir.'/config.yaml')['env'];
+        if (!in_array($env, ['production', 'development'])) {
+            throw new Exception('Invalid environment: '.ENV);
+        }
+        define('ENV', $env);
+        define('DEVELOPMENT', $env === 'development');
+        define('PRODUCTION', $env === 'production');
+
         define('APP_DIR', $appDir);
         define('APP_NAME', $appName);
         define('TMP_DIR', '/tmp/'.$appName.'/'.ENV);
         if (!is_dir(TMP_DIR)) {
-            mkdir(TMP_DIR, 0700);
+            mkdir(TMP_DIR, 0700, true);
         }
         // TODO: rotate logs
-        define('LOG_DIR', APP_DIR.'/log/'.ENV);
+        define('LOG_DIR', APP_DIR.'/logs');
         if (!is_dir(LOG_DIR)) {
             mkdir(LOG_DIR, 0700);
         }
 
         echo sprintf("ENV: %s APP_DIR: %s\n", ENV, APP_DIR);
 
-        spl_autoload_register(function ($class) {
-            $path = APP_DIR.'/classes/'.str_replace('_', DIRECTORY_SEPARATOR, $class).'.php';
+        $classes_dir = is_dir(APP_DIR.'/classes') ? APP_DIR.'/classes' : APP_DIR;
+        spl_autoload_register(function ($class) use ($classes_dir) {
+            $path = $classes_dir.'/'.str_replace('_', DIRECTORY_SEPARATOR, $class).'.php';
             if (file_exists($path)) {
                 include $path;
             }
@@ -51,14 +60,28 @@ class App
 
         Worker::$pidFile = sprintf('%s/master.pid', LOG_DIR);
         Worker::$logFile = sprintf('%s/workerman.log', LOG_DIR);
-        if (PRODUCTION || UPSTREAM) {
+        if (PRODUCTION) {
             Worker::$stdoutFile = sprintf('%s/stdout.log', LOG_DIR);
         }
 
-        $this->worker          = $worker          = new Worker(sprintf('unix:///tmp/%s-%s.sock', APP_NAME, ENV));
+        Config::load();
+        if (Config::get('server.port')) {
+            $host = Config::get('server.host', '127.0.0.1');
+            $port = Config::get('server.port');
+            if ($port === 'auto') {
+                // Automatically find free port
+                $sock = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+                socket_bind($sock, $host, 0);
+                socket_getsockname($sock, $_, $port);
+                socket_close($sock);
+            }
+            $worker = new Worker(sprintf('http://%s:%d', $host, $port));
+        } else {
+            $worker = new Worker(sprintf('unix:///tmp/%s-%s.sock', APP_NAME, ENV));
+        }
         $worker->reusePort     = false;
         $worker->protocol      = '\Workerman\Protocols\Http';
-        $worker->count         = (PRODUCTION || UPSTREAM) ? (int) (trim(shell_exec('nproc'))) : 2;
+        $worker->count         = PRODUCTION ? (int) (trim(shell_exec('nproc'))) : 2;
         $worker->onWorkerStart = function ($worker) use ($workerFunc) {
             $this->onWorkerStart($worker);
             if ($workerFunc) {
@@ -67,6 +90,7 @@ class App
             $this->dispatcher = new FastRoute\Dispatcher\GroupCountBased($this->routeCollector->getData());
         };
         $worker->onMessage = [$this, 'onMessage'];
+        $this->worker      = $worker;
 
         $this->routeCollector = new FastRoute\RouteCollector(
             new FastRoute\RouteParser\Std(),
@@ -84,8 +108,12 @@ class App
         $router = $this->routeCollector;
 
         if (!$routes) {
-            list($method, $path) = preg_split('/\s+/', $path);
-            $method              = explode('|', $method);
+            if (strpos($path, ' ') !== false) {
+                list($method, $path) = preg_split('/\s+/', $path);
+                $method              = explode('|', $method);
+            } else {
+                $method = ['GET'];
+            }
             $router->addRoute($method, $path, $handler);
         } else {
             $prefix = $path;
@@ -282,7 +310,7 @@ class App
 
                 fwrite(STDERR, $message."\n"); // development: log to stderr, production: log to Worker::$stdoutFile
 
-                $conn->send(new Response(500, ['Content-Type' => 'text/plain'], (PRODUCTION || UPSTREAM) ? '<h1>Internal Server Error</h1>' : $message));
+                $conn->send(new Response(500, ['Content-Type' => 'text/plain'], PRODUCTION ? '<h1>Internal Server Error</h1>' : $message));
             }
             break;
         }
@@ -290,7 +318,9 @@ class App
 
     protected function onWorkerStart($worker)
     {
-        chmod(sprintf('/tmp/%s-%s.sock', APP_NAME, ENV), 0777);
+        if (strpos($this->worker->getSocketName(), 'unix://') === 0) {
+            chmod(substr($this->worker->getSocketName(), 7), 0777);
+        }
 
         //if (!DEVELOPMENT) {
         foreach (array_values(self::$renderers) as $rendererClass) {
@@ -301,7 +331,11 @@ class App
         Config::load();
         Http::SessionName('sid');
         set_error_handler('exception_error_handler');
-        Session::handlerClass(RedisSessionHandler::class, Config::get('session'));
+        if (PRODUCTION) {
+            Session::handlerClass(Session_Redis::class, Config::get('redis'));
+        } else {
+            Session::handlerClass(Session_File::class);
+        }
 
         $controllerDir = APP_DIR.'/classes/Controller';
         if (is_dir($controllerDir)) {
@@ -345,12 +379,35 @@ class App
         foreach ($parameters as $param) {
             list($name, $isOptional, $default) = $param;
             switch ($name) {
-                case 'connection': $callParams = $conn; break;
-                case 'request': $callParams[]  = $request; break;
-                case 'session': $callParams[]  = $request->session; break;
-                case 'get': $callParams[]      = $request->get(); break;
-                case 'post': $callParams[]     = $request->post(); break;
-                case 'files': $callParams[]    = $request->file(); break;
+                case 'connection':
+                    $callParams = $conn;
+                    break;
+                case 'request':
+                    $callParams[] = $request;
+                    break;
+                case 'session':
+                    $callParams[] = $request->session;
+                    break;
+                case 'get':
+                    $callParams[] = $request->get();
+                    break;
+                case 'post':
+                    $callParams[] = $request->post();
+                    break;
+                case 'files':
+                    $callParams[] = $request->file();
+                    break;
+                case 'db':
+                    $callParams[] = DB::instance();
+                    break;
+                case 'sql':
+                    if (is_array($handler)) {
+                        $sqlFile      = APP_DIR.'/classes/'.str_replace('_', '/', $handler[0]).'.sql';
+                        $callParams[] = SQLLoader::instance($sqlFile);
+                    } else {
+                        throw new Exception('SQLLoader::instance: cannot determine sql file path');
+                    }
+                    break;
                 default:
                     if (isset($vars[$name])) {
                         $callParams[] = $vars[$name];

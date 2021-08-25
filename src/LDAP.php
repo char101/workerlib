@@ -2,9 +2,10 @@
 
 class LDAP
 {
-    private $conn;
+    protected $conn;
+    private static $instance;
 
-    public function __construct()
+    protected function __construct()
     {
         $this->conn = ldap_connect(Config::get('ldap.uri'));
         if (!$this->conn) {
@@ -57,5 +58,13 @@ class LDAP
         }
 
         return $values;
+    }
+
+    public static function instance()
+    {
+        if (!self::$instance) {
+            self::$instance = new static();
+        }
+        return self::$instance;
     }
 }

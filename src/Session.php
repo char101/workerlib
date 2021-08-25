@@ -10,6 +10,7 @@ class Session extends Workerman\Protocols\Http\Session
         parent::__construct($sessionId);
     }
 
+    // Called by App after every request to renew session
     public static function updateTimestamp($sessionId)
     {
         if (!static::$_handler) {

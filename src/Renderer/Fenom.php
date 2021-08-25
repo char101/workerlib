@@ -24,7 +24,7 @@ class Renderer_Fenom extends Renderer
         ]);
 
         $this->scss = new \ScssPhp\ScssPhp\Compiler();
-        $this->scss->setOutputStyle((PRODUCTION || UPSTREAM) ? \ScssPhp\ScssPhp\OutputStyle::COMPRESSED : \ScssPhp\ScssPhp\OutputStyle::EXPANDED);
+        $this->scss->setOutputStyle(PRODUCTION ? \ScssPhp\ScssPhp\OutputStyle::COMPRESSED : \ScssPhp\ScssPhp\OutputStyle::EXPANDED);
 
         $this->parsedown = new Parsedown();
 

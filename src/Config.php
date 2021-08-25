@@ -14,11 +14,12 @@ class Config
         $value      = self::$config;
         $hasDefault = count(func_get_args()) === 2;
         foreach (explode('.', $path) as $key) {
-            if (array_key_exists($key, $value)) {
+            if (is_array($value) && array_key_exists($key, $value)) {
                 $value = $value[$key];
             } elseif ($hasDefault) {
                 return $default;
             } else {
+                var_dump(self::$config);
                 throw new Exception('Config key '.$path.' not found');
             }
         }
@@ -29,7 +30,7 @@ class Config
     {
         $value = self::$config;
         foreach (explode('.', $path) as $key) {
-            if (!array_key_exists($value, $key)) {
+            if (!is_array($value) || !array_key_exists($key, $value)) {
                 return false;
             }
             $value = $value[$key];
@@ -41,28 +42,15 @@ class Config
     {
         $config = yaml_parse_file(APP_DIR.'/config.yaml');
 
-        $allKeys = [];
-        $envKeys = [];
-        foreach ($config as $env => $values) {
-            $keys = self::flattenKeys($values);
-            $allKeys += $keys;
-            $envKeys[$env] = $keys;
-        }
-
-        foreach ($envKeys as $env => $keys) {
-            $diff = array_diff_key($allKeys, $keys);
-            if ($diff) {
-                throw new Exception(sprintf('Missing key(s) for environment "%s": %s', $env, implode(', ', array_keys($diff))));
-            }
-        }
-
-        foreach ($config[ENV] as $key => $values) {
+        foreach ($config as $key => $values) {
             if (isset($values['host'], $values['port'])) {
                 $host = $values['host'];
                 $port = $values['port'];
                 if (!empty($host)) {
                     if ($host[0] != '/') {
-                        checkPortOpen($key, $host, $port);
+                        if (is_numeric($port)) {
+                            self::checkPort($key, $host, $port);
+                        }
                     } else {
                         if (!file_exists($host)) {
                             throw new Exception(sprintf('Cannot connect to %s via %s', $key, $host));
@@ -72,7 +60,7 @@ class Config
             }
         }
 
-        return $config[ENV];
+        return $config;
     }
 
     public static function flattenKeys($values)
@@ -88,5 +76,15 @@ class Config
             }
         }
         return $keys;
+    }
+
+    private static function checkPort($host, $port)
+    {
+        $ret = fsockopen($host, $port, timeout: 1);
+        if ($ret === false) {
+            return false;
+        }
+        fclose($ret);
+        return true;
     }
 }
