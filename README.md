@@ -6,23 +6,9 @@ Utility classes for [Workerman](https://github.com/walkor/Workerman/).
 
 ## Installation
 
-Create `composer.json`:
-```json
-{
-  "minimum-stability": "dev",
-  "repositories": [
-    {
-      "type": "vcs",
-      "url": "https://github.com/char101/workerlib"
-    }
-  ],
-  "require": {
-    "char101/workerlib": "dev-master"
-  }
-}
 ```
-
-Then run `composer install`.
+composer require char101/workerlib
+```
 
 Create `main.php` as the application entry point:
 ```php
