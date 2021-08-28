@@ -1,6 +1,6 @@
 {
   "name": "char101/workerlib",
-  "version": "0.1",
+  "version": "0.1.0",
   "minimum-stability": "dev",
   "require": {
     "php": ">=8.0.0",
