@@ -49,7 +49,7 @@ class Config
                 if (!empty($host)) {
                     if ($host[0] != '/') {
                         if (is_numeric($port)) {
-                            self::checkPort($key, $host, $port);
+                            self::checkPort($host, $port);
                         }
                     } else {
                         if (!file_exists($host)) {
